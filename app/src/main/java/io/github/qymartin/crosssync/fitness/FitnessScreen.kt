@@ -3,6 +3,7 @@ package io.github.qymartin.crosssync.fitness
 import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -61,12 +62,10 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private val Orange = Color(0xFFF2A65A)
-private val Blue = Color(0xFF7AB8FF)
-private val White = Color(0xFFE3E3E8)
-private val LightBlue = Color(0xFFA9C8FF)
-private val Indigo = Color(0xFF6474E8)
-private val Purple = Color(0xFFD59BF0)
+/** Line colors; light and dark sets so every line keeps enough contrast on its card. */
+private data class Palette(val orange: Color, val blue: Color, val lightBlue: Color, val indigo: Color, val purple: Color)
+private val DarkPalette = Palette(Color(0xFFF2A65A), Color(0xFF7AB8FF), Color(0xFFA9C8FF), Color(0xFF6474E8), Color(0xFFD59BF0))
+private val LightPalette = Palette(Color(0xFFB85A00), Color(0xFF1565C0), Color(0xFF5B8DEF), Color(0xFF2E3A9E), Color(0xFF9C27B0))
 
 private const val STALE_MS = 6 * 3_600_000L
 private val updatedFmt = DateTimeFormatter.ofPattern("MM-dd HH:mm").withZone(ZoneId.systemDefault())
@@ -167,6 +166,9 @@ fun FitnessScreen() {
             (if (updated != null) "数据更新于 $updated" else "尚未读取数据") + " · 不含今天",
             style = MaterialTheme.typography.bodySmall,
         )
+        if (days.isNotEmpty()) {
+            Text(coverage(days), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         busy?.let {
             Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
             LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -183,6 +185,9 @@ fun FitnessScreen() {
             }
         }
 
+        val pal = if (isSystemInDarkTheme()) DarkPalette else LightPalette
+        val Orange = pal.orange; val Blue = pal.blue; val LightBlue = pal.lightBlue; val Indigo = pal.indigo; val Purple = pal.purple
+        val White = MaterialTheme.colorScheme.onSurface
         val v = series.values
         val charts = listOf(
             "总卡路里" to listOf(
@@ -225,6 +230,18 @@ fun FitnessScreen() {
             }
         }
     }
+}
+
+/** e.g. "已读取：卡路里 183 天（2026-05-19 起）· 体重 12 天（…）…" — shows how far back each kind of data goes. */
+private fun coverage(days: Map<java.time.LocalDate, DayStats>): String {
+    val parts = listOf(
+        "卡路里" to { d: DayStats -> d.calories }, "体重" to { d: DayStats -> d.weightKg },
+        "体脂" to { d: DayStats -> d.bodyFatPct }, "睡眠" to { d: DayStats -> d.sleepMin },
+    ).map { (name, get) ->
+        val with = days.filterValues { get(it) != null }.keys
+        if (with.isEmpty()) "$name 0 天" else "$name ${with.size} 天（${with.min()} 起）"
+    }
+    return "已读取：" + parts.joinToString(" · ")
 }
 
 @Composable
