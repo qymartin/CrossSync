@@ -1,7 +1,8 @@
 # CrossSync — notes for Claude
 
 Android app that syncs Garmin Connect daily data to Health Connect. The owner talks in Chinese; reply in Chinese.
-Version history and the v1.0 feature list: `docs/VERSIONS.md`.
+Version history and feature lists (v1.0, v1.1): `docs/VERSIONS.md`.
+Modules: Sync (`core/`, `garmin/`, `healthconnect/`, `sync/`, the Sync screen in `ui/MainActivity.kt`) and Fitness (`fitness/`, read-only from Health Connect). Keep them independent.
 
 ## Build and release
 - Every push to `main` builds a signed APK in GitHub Actions and publishes Release `v<VERSION>.<run_number>`. The owner installs and updates through Obtainium.
@@ -29,5 +30,6 @@ git push origin main
 
 Keep `docs/`, `CLAUDE.md` and `signing/` as they are on main. Then wait for `ci-logs` to show the new run
 succeeded, tell the user the new release number (it will read 1.0.<run>), and ask them to update in Obtainium.
-Data compatibility: v1.0 reads the ledger JSON with `optString`, so a ledger written by a later version still loads;
+Rolling back from 1.1 removes the Fitness tab; its cache file `fitness.json` stays on the phone unused, and the extra
+Health Connect read permissions stay granted until the user removes them. Data compatibility: v1.0 reads the ledger JSON with `optString`, so a ledger written by a later version still loads;
 if a later version added new Health Connect data types, records it wrote stay in Health Connect.
