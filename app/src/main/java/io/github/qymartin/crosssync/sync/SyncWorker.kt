@@ -8,6 +8,7 @@ import io.github.qymartin.crosssync.core.Settings
 import io.github.qymartin.crosssync.core.TemporaryException
 import io.github.qymartin.crosssync.garmin.GarminSource
 import io.github.qymartin.crosssync.healthconnect.HealthConnectSink
+import kotlinx.coroutines.CancellationException
 import java.time.LocalDate
 
 class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
@@ -66,6 +67,12 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                 Notifier.alert(ctx, "CrossSync 覆盖失败", msg)
                 Result.success()
             }
+        } catch (e: CancellationException) {
+            // The system paused this job (network change, app swiped away, ...).
+            // WorkManager re-runs it by itself; progress so far is already in the ledger.
+            ledger.addRun(RunLog(System.currentTimeMillis(), label, 0, 0, 0, emptyList(),
+                "被系统暂停（代码 $stopReason），稍后自动继续"))
+            throw e
         } catch (e: AuthRequiredException) {
             fail(e.message ?: "Garmin 登录已失效", true)
         } catch (e: TemporaryException) {
