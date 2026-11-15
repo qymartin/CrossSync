@@ -34,10 +34,14 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         val metrics = settings.enabledMetrics
         val label = "$trigger $from ~ $to"
 
+        fun log(w: Int, sk: Int, d: Int, failed: List<String>, msg: String?) = ledger.addRun(
+            RunLog(System.currentTimeMillis(), trigger, w, sk, d, failed, msg, from.toString(), to.toString())
+        )
+
         fun fail(msg: String, needsLogin: Boolean): Result {
             settings.lastError = msg
             settings.lastErrorNeedsLogin = needsLogin
-            ledger.addRun(RunLog(System.currentTimeMillis(), label, 0, 0, 0, emptyList(), msg))
+            log(0, 0, 0, emptyList(), msg)
             Notifier.alert(ctx, "CrossSync 同步失败", msg)
             return Result.failure()
         }
@@ -56,28 +60,28 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             val summary = "写入 ${r.written} 条，未变化 ${r.skipped} 条，删除 ${r.deleted} 条"
             if (r.failed.isEmpty()) {
                 settings.lastError = null
-                ledger.addRun(RunLog(System.currentTimeMillis(), label, r.written, r.skipped, r.deleted, emptyList(), null))
+                log(r.written, r.skipped, r.deleted, emptyList(), null)
                 if (r.written + r.deleted > 0) Notifier.result(ctx, "$label：$summary")
                 Result.success()
             } else {
                 val msg = "${r.failed.size} 条写入 Health Connect 失败，已安排下次自动重试：\n" + r.failed.joinToString("\n")
                 settings.lastError = msg
                 settings.lastErrorNeedsLogin = false
-                ledger.addRun(RunLog(System.currentTimeMillis(), label, r.written, r.skipped, r.deleted, r.failed, null))
+                log(r.written, r.skipped, r.deleted, r.failed, null)
                 Notifier.alert(ctx, "CrossSync 覆盖失败", msg)
                 Result.success()
             }
         } catch (e: CancellationException) {
             // The system paused this job (network change, app swiped away, ...).
             // WorkManager re-runs it by itself; progress so far is already in the ledger.
-            ledger.addRun(RunLog(System.currentTimeMillis(), label, 0, 0, 0, emptyList(),
-                "被系统暂停（代码 $stopReason），稍后自动继续"))
+            log(0, 0, 0, emptyList(),
+                "被系统暂停（代码 $stopReason），稍后自动继续")
             throw e
         } catch (e: AuthRequiredException) {
             fail(e.message ?: "Garmin 登录已失效", true)
         } catch (e: TemporaryException) {
             if (runAttemptCount < MAX_RETRIES) {
-                ledger.addRun(RunLog(System.currentTimeMillis(), label, 0, 0, 0, emptyList(), "${e.message}（稍后重试）"))
+                log(0, 0, 0, emptyList(), "${e.message}（稍后重试）")
                 Result.retry()
             } else {
                 fail("${e.message}（已重试 $MAX_RETRIES 次）", false)

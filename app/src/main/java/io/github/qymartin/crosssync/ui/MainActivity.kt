@@ -27,6 +27,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -48,6 +49,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -62,7 +64,9 @@ import io.github.qymartin.crosssync.core.Settings
 import io.github.qymartin.crosssync.garmin.GarminAuth
 import io.github.qymartin.crosssync.garmin.LoginActivity
 import io.github.qymartin.crosssync.healthconnect.HealthConnectSink
+import io.github.qymartin.crosssync.core.Metric
 import io.github.qymartin.crosssync.sync.Ledger
+import io.github.qymartin.crosssync.sync.RunLog
 import io.github.qymartin.crosssync.sync.Notifier
 import io.github.qymartin.crosssync.sync.Scheduler
 import java.time.Instant
@@ -205,21 +209,8 @@ private fun MainScreen() {
         }
 
         Section("同步设置") {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("每日同步时间  %02d:%02d".format(settings.syncHour, settings.syncMinute), Modifier.weight(1f))
-                TextButton(onClick = {
-                    TimePickerDialog(ctx, { _, h, m ->
-                        settings.syncHour = h; settings.syncMinute = m
-                        Scheduler.scheduleDaily(ctx); tick++
-                    }, settings.syncHour, settings.syncMinute, true).show()
-                }) { Text("修改") }
-            }
-            if (settings.nextRunAt > 0) {
-                Text("下次同步：${timeFmt.format(Instant.ofEpochMilli(settings.nextRunAt))}（每次回看过去 7 天）",
-                    style = MaterialTheme.typography.bodySmall)
-            }
-            Text("同步的数据类型", fontWeight = FontWeight.Medium)
-            io.github.qymartin.crosssync.core.Metric.entries.forEach { m ->
+            SubTitle("同步数据类型")
+            Metric.entries.forEach { m ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(m.label, Modifier.weight(1f))
                     Switch(checked = m in settings.enabledMetrics, onCheckedChange = { on ->
@@ -228,48 +219,87 @@ private fun MainScreen() {
                     })
                 }
             }
-        }
 
-        Section("操作") {
+            HorizontalDivider(Modifier.padding(vertical = 4.dp))
+            SubTitle("自动同步")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("每天 %02d:%02d".format(settings.syncHour, settings.syncMinute), Modifier.weight(1f))
+                TextButton(onClick = {
+                    TimePickerDialog(ctx, { _, h, m ->
+                        settings.syncHour = h; settings.syncMinute = m
+                        Scheduler.scheduleDaily(ctx); tick++
+                    }, settings.syncHour, settings.syncMinute, true).show()
+                }) { Text("修改时间") }
+            }
+            Text("每次同步过去 7 个完整日：与 Garmin 一致的跳过，不一致的覆盖。", style = MaterialTheme.typography.bodySmall)
+            if (settings.nextRunAt > 0) {
+                Text("下次同步：${timeFmt.format(Instant.ofEpochMilli(settings.nextRunAt))}", style = MaterialTheme.typography.bodySmall)
+            }
+
+            HorizontalDivider(Modifier.padding(vertical = 4.dp))
+            SubTitle("手动同步")
             if (running) Text("同步进行中…", color = MaterialTheme.colorScheme.primary)
             Button(onClick = { Scheduler.runDaily(ctx, "手动同步"); toast(ctx, "已开始同步"); tick++ },
-                modifier = Modifier.fillMaxWidth()) { Text("立即同步（过去 7 天）") }
-            OutlinedButton(onClick = { Scheduler.runBackfill(ctx); toast(ctx, "已开始回填过去 180 天"); tick++ },
-                modifier = Modifier.fillMaxWidth()) { Text("回填过去 180 天") }
+                modifier = Modifier.fillMaxWidth()) { Text("同步过去 7 天") }
             OutlinedButton(onClick = {
                 pickRange(ctx) { from, to ->
-                    Scheduler.runRange(ctx, from, to, force = true, trigger = "强制重写")
-                    toast(ctx, "已开始强制重写 $from ~ $to"); tick++
+                    Scheduler.runRange(ctx, from, to, force = true, trigger = "指定范围")
+                    toast(ctx, "已开始同步 $from ~ $to"); tick++
                 }
-            }, modifier = Modifier.fillMaxWidth()) { Text("强制重写指定日期范围") }
+            }, modifier = Modifier.fillMaxWidth()) { Text("同步指定日期范围（强制覆盖）") }
+        }
+
+        Section("导出") {
+            Text("把 CrossSync 写入过的全部数据导出为 CSV 文件，作为独立备份。", style = MaterialTheme.typography.bodySmall)
             OutlinedButton(onClick = { exportLauncher.launch("crosssync-${LocalDate.now()}.csv") },
                 modifier = Modifier.fillMaxWidth()) { Text("导出 CSV") }
         }
 
-        Section("最近写入") {
-            val rows = ledger.all().take(14)
-            if (rows.isEmpty()) Text("暂无记录")
-            rows.forEach { e ->
-                Row {
-                    Text(e.date, Modifier.weight(1f))
-                    Text("%.0f kcal".format(e.value), Modifier.weight(1f))
-                    Text(if (e.ok) "✓" else "✗ 失败", color = if (e.ok) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
+        Section("同步记录") {
+            val runs = ledger.runs()
+            val ok = if (isSystemInDarkTheme()) Color(0xFF81C784) else Color(0xFF2E7D32)
+            val bad = MaterialTheme.colorScheme.error
+            val last = runs.firstOrNull()
+            if (last == null) {
+                Text("暂无记录")
+            } else {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                    Column(Modifier.padding(12.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("最近一次同步", fontWeight = FontWeight.Bold)
+                        Text(
+                            if (last.ok) "成功" else "失败",
+                            color = if (last.ok) ok else bad,
+                            style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                        )
+                        Text("时间：${timeFmt.format(Instant.ofEpochMilli(last.at))}")
+                        Text("范围：${rangeOf(last.from, last.to)}")
+                        Text("方式：${last.trigger}")
+                        Text(detailOf(last), color = if (last.ok) MaterialTheme.colorScheme.onSurfaceVariant else bad)
+                    }
                 }
             }
-        }
-
-        Section("同步日志") {
-            val runs = ledger.runs().take(10)
-            if (runs.isEmpty()) Text("暂无日志")
-            runs.forEach { r ->
-                val detail = r.message ?: "写入 ${r.written}，未变化 ${r.skipped}，删除 ${r.deleted}" +
-                    if (r.failed.isNotEmpty()) "，失败 ${r.failed.size}" else ""
-                Text("${timeFmt.format(Instant.ofEpochMilli(r.at))}  ${r.trigger}\n$detail",
-                    style = MaterialTheme.typography.bodySmall)
+            if (runs.size > 1) SubTitle("历史")
+            runs.drop(1).take(20).forEach { r ->
+                Row {
+                    Text(if (r.ok) "✓ " else "✗ ", color = if (r.ok) ok else bad, fontWeight = FontWeight.Bold)
+                    Text(
+                        "${timeFmt.format(Instant.ofEpochMilli(r.at))}  ${r.trigger}  ${rangeOf(r.from, r.to)}\n${detailOf(r)}",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
             }
         }
     }
 }
+
+@Composable
+private fun SubTitle(text: String) = Text(text, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.primary)
+
+private fun rangeOf(from: String, to: String) = if (from.isEmpty()) "—" else if (from == to) from else "$from ~ $to"
+
+private fun detailOf(r: RunLog): String = r.message
+    ?: ("写入 ${r.written}，未变化 ${r.skipped}，删除 ${r.deleted}" +
+        if (r.failed.isNotEmpty()) "，失败 ${r.failed.size}：\n" + r.failed.joinToString("\n") else "")
 
 @Composable
 private fun Section(title: String, content: @Composable () -> Unit) {

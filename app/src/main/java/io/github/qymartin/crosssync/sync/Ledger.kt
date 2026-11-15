@@ -29,7 +29,12 @@ data class RunLog(
     val deleted: Int,
     val failed: List<String>,
     val message: String?,
-)
+    val from: String = "",
+    val to: String = "",
+) {
+    /** Finished with nothing failed. */
+    val ok: Boolean get() = message == null && failed.isEmpty()
+}
 
 /**
  * The app's own record of what it wrote, kept as one small JSON file
@@ -91,6 +96,7 @@ class Ledger private constructor(private val file: File) {
                     put("skipped", r.skipped); put("deleted", r.deleted)
                     put("failed", JSONArray(r.failed))
                     if (r.message != null) put("message", r.message)
+                    put("from", r.from); put("to", r.to)
                 })
             }
         })
@@ -127,6 +133,7 @@ class Ledger private constructor(private val file: File) {
                             deleted = o.getInt("deleted"),
                             failed = List(failed?.length() ?: 0) { failed!!.getString(it) },
                             message = o.optString("message").ifEmpty { null },
+                            from = o.optString("from"), to = o.optString("to"),
                         )
                     )
                 }
