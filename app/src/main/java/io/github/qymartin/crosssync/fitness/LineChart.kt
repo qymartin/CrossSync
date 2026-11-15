@@ -155,7 +155,7 @@ fun LineChart(
             drawPath(
                 path, line.color,
                 style = Stroke(
-                    width = (if (line.dashed) 2 else 2.5).dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round,
+                    width = (if (line.dashed) 2.0 else 2.5).dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round,
                     pathEffect = if (line.dashed) PathEffect.dashPathEffect(floatArrayOf(10f, 8f)) else null,
                 ),
             )
