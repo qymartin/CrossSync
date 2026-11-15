@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.view.ViewGroup
 import android.webkit.CookieManager
+import android.webkit.JavascriptInterface
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -55,12 +56,24 @@ class LoginActivity : ComponentActivity() {
                 onUrl(Uri.parse(url))
             }
 
+            override fun onPageFinished(view: WebView, url: String) {
+                view.evaluateJavascript(TICKET_HOOK, null)
+            }
+
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                 if (ticketOf(request.url) == null) return null
                 runOnUiThread { onUrl(request.url) }
                 return WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
             }
         }
+        // Backup path: if the page returns the ticket in a JSON response instead of
+        // redirecting, the injected hook below passes it to us.
+        web.addJavascriptInterface(object {
+            @JavascriptInterface
+            fun ticket(t: String) {
+                if (t.startsWith("ST-")) runOnUiThread { onTicket(t) }
+            }
+        }, "CrossSync")
         web.loadUrl(GarminConfig.signInUrl)
     }
 
@@ -70,7 +83,12 @@ class LoginActivity : ComponentActivity() {
     /** Returns true when the URL carried the ticket (so the WebView should not load it). */
     private fun onUrl(uri: Uri): Boolean {
         val ticket = ticketOf(uri) ?: return false
-        if (handled) return true
+        onTicket(ticket)
+        return true
+    }
+
+    private fun onTicket(ticket: String) {
+        if (handled) return
         handled = true
         web.stopLoading()
         web.visibility = WebView.GONE
@@ -90,6 +108,30 @@ class LoginActivity : ComponentActivity() {
                 web.loadUrl(GarminConfig.signInUrl)
             }
         }
-        return true
+    }
+
+    private companion object {
+        /** Watches fetch/XHR responses for a "serviceTicketId" and reports it. */
+        const val TICKET_HOOK = """
+            (function () {
+              if (window.__crossSyncHook) return; window.__crossSyncHook = true;
+              function check(t) {
+                var m = /"serviceTicketId"\s*:\s*"(ST-[^"]+)"/.exec(t || "");
+                if (m && window.CrossSync) CrossSync.ticket(m[1]);
+              }
+              var f = window.fetch;
+              if (f) window.fetch = function () {
+                return f.apply(this, arguments).then(function (r) {
+                  try { r.clone().text().then(check); } catch (e) {}
+                  return r;
+                });
+              };
+              var send = XMLHttpRequest.prototype.send;
+              XMLHttpRequest.prototype.send = function () {
+                this.addEventListener("load", function () { try { check(this.responseText); } catch (e) {} });
+                return send.apply(this, arguments);
+              };
+            })();
+        """
     }
 }
