@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Original CrossSync mark: a feather inside two sync arrows. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- upper sync arc + arrowhead -->
+    <path
+        android:pathData="M32,54 A22,22 0 0 1 70.6,39.6"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeWidth="4.5" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M75.8,45.4 L75.1,35.0 L65.6,43.7 Z" />
+    <!-- lower sync arc + arrowhead -->
+    <path
+        android:pathData="M76,54 A22,22 0 0 1 37.4,68.4"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeWidth="4.5" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M32.2,62.6 L32.9,73.0 L42.4,64.3 Z" />
+    <!-- feather -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M64,38 C52,40 44,50 45,66 C57,65 65,53 64,38 Z" />
+    <path
+        android:pathData="M62,42 L47,63"
+        android:strokeColor="#4B3A8C"
+        android:strokeLineCap="round"
+        android:strokeWidth="1.5" />
+    <path
+        android:pathData="M45,66 L41.5,71.5"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeWidth="2.5" />
+</vector>
