@@ -79,7 +79,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           NOTES: ${{ github.event.head_commit.message }}
         run: |
-          V="1.0.${{ github.run_number }}"
+          V="$(tr -d '[:space:]' < VERSION).${{ github.run_number }}"
           cp app/build/outputs/apk/release/app-release.apk "CrossSync-$V.apk"
           gh release create "v$V" "CrossSync-$V.apk" --title "CrossSync $V" --notes "${NOTES:-manual build}"
 

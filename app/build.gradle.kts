@@ -6,7 +6,9 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-// CI sets these; local builds fall back to an unsigned release / version 1.
+// Version = "<feature version from VERSION file>.<CI run number>", e.g. 1.0.8.
+// The run number only grows, so it doubles as Android's versionCode.
+val featureVersion = rootProject.file("VERSION").readText().trim()
 val runNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
 val signingPassword: String? = System.getenv("SIGNING_PASSWORD")?.trim()?.takeIf { it.isNotBlank() }
 val signingStore: String? = System.getenv("SIGNING_STORE_FILE")
@@ -21,7 +23,7 @@ android {
         minSdk = 28
         targetSdk = 36
         versionCode = runNumber
-        versionName = "1.0.$runNumber"
+        versionName = "$featureVersion.$runNumber"
     }
 
     signingConfigs {
