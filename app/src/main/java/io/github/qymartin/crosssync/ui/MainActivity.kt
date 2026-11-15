@@ -15,6 +15,17 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.res.painterResource
+import io.github.qymartin.crosssync.R
+import io.github.qymartin.crosssync.fitness.FitnessScreen
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -89,8 +100,35 @@ class MainActivity : ComponentActivity() {
                 else -> lightColorScheme()
             }
             MaterialTheme(colorScheme = colors) {
-                Surface(Modifier.fillMaxSize()) { MainScreen() }
+                Surface(Modifier.fillMaxSize()) { AppRoot() }
             }
+        }
+    }
+}
+
+/** Bottom navigation: Fitness (left, default) and Sync (right). The two modules run independently. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AppRoot() {
+    var tab by rememberSaveable { mutableIntStateOf(0) }
+    Scaffold(
+        bottomBar = {
+            NavigationBar {
+                NavigationBarItem(
+                    selected = tab == 0, onClick = { tab = 0 },
+                    icon = { Icon(painterResource(R.drawable.ic_tab_fitness), contentDescription = null) },
+                    label = { Text("Fitness") },
+                )
+                NavigationBarItem(
+                    selected = tab == 1, onClick = { tab = 1 },
+                    icon = { Icon(painterResource(R.drawable.ic_stat_sync), contentDescription = null) },
+                    label = { Text("Sync") },
+                )
+            }
+        },
+    ) { pad ->
+        Box(Modifier.fillMaxSize().padding(pad).consumeWindowInsets(pad)) {
+            if (tab == 0) FitnessScreen() else MainScreen()
         }
     }
 }

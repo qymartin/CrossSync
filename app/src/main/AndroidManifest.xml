@@ -13,6 +13,13 @@
     <!-- Health Connect: write-only. Add one line per new data type. -->
     <uses-permission android:name="android.permission.health.WRITE_TOTAL_CALORIES_BURNED" />
 
+    <!-- Fitness module: read-only. -->
+    <uses-permission android:name="android.permission.health.READ_TOTAL_CALORIES_BURNED" />
+    <uses-permission android:name="android.permission.health.READ_WEIGHT" />
+    <uses-permission android:name="android.permission.health.READ_BODY_FAT" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP" />
+    <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_HISTORY" />
+
     <queries>
         <package android:name="com.google.android.apps.healthdata" />
     </queries>
