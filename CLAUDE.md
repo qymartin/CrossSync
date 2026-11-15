@@ -2,6 +2,8 @@
 
 Android app that syncs Garmin Connect daily data to Health Connect. The owner talks in Chinese; reply in Chinese.
 Version history and feature lists (v1.0, v1.1): `docs/VERSIONS.md`.
+Product overview, working agreements and the open backlog live in the claude.ai Project "CrossSync"
+(docs `claude/CrossSync-guide.md` and `claude/status-and-backlog.md`); update the backlog doc when work finishes.
 Modules: Sync (`core/`, `garmin/`, `healthconnect/`, `sync/`, the Sync screen in `ui/MainActivity.kt`) and Fitness (`fitness/`, read-only from Health Connect). Keep them independent.
 
 ## Build and release
