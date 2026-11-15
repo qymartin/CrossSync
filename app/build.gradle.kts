@@ -8,7 +8,7 @@ plugins {
 
 // CI sets these; local builds fall back to an unsigned release / version 1.
 val runNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
-val signingPassword: String? = System.getenv("SIGNING_PASSWORD")?.takeIf { it.isNotBlank() }
+val signingPassword: String? = System.getenv("SIGNING_PASSWORD")?.trim()?.takeIf { it.isNotBlank() }
 val signingStore: String? = System.getenv("SIGNING_STORE_FILE")
     ?.takeIf { signingPassword != null && File(it).exists() }
 

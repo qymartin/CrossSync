@@ -33,8 +33,9 @@ jobs:
         env:
           SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
         run: |
+          # Never use `set -x` here: it would print the password.
           exec > >(tee -a signing.log) 2>&1
-          set -x
+          SIGNING_PASSWORD="$(printf '%s' "$SIGNING_PASSWORD" | tr -d '\r\n')"
           if [ -z "$SIGNING_PASSWORD" ]; then
             echo "::warning::Secret SIGNING_PASSWORD is not set: building unsigned, no release."
             echo "SIGNED=false" >> "$GITHUB_ENV"
