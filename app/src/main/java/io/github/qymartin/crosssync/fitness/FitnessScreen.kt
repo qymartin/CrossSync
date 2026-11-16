@@ -159,7 +159,9 @@ fun FitnessScreen() {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             GrainSelector(grain, { grain = it })
             Spacer(Modifier.weight(1f))
-            OutlinedButton(onClick = { refresh(false) }, enabled = busy == null && m?.isEmpty() == true) { Text("刷新") }
+            // Manual refresh re-reads all history, so data added to Health Connect later
+            // (e.g. a backfill of old months) shows up. Auto refresh only re-reads the last 7 days.
+            OutlinedButton(onClick = { refresh(true) }, enabled = busy == null && m?.isEmpty() == true) { Text("刷新") }
         }
         val updated = repo.store.lastRefreshAt.takeIf { it > 0 }?.let { updatedFmt.format(Instant.ofEpochMilli(it)) }
         Text(
@@ -178,7 +180,7 @@ fun FitnessScreen() {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(err, style = MaterialTheme.typography.bodySmall)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { refresh(false) }) { Text("重试") }
+                        Button(onClick = { refresh(true) }) { Text("重试") }
                         TextButton(onClick = { error = null }) { Text("忽略") }
                     }
                 }
