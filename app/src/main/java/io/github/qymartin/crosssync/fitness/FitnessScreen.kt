@@ -1,7 +1,9 @@
 package io.github.qymartin.crosssync.fitness
 
 import android.content.Context
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.Canvas
@@ -56,6 +58,8 @@ import androidx.compose.ui.unit.dp
 import androidx.health.connect.client.PermissionController
 import io.github.qymartin.crosssync.healthconnect.HealthConnectSink
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
@@ -95,12 +99,12 @@ fun FitnessScreen() {
     var busy by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    fun refresh(full: Boolean) {
+    fun refresh(mode: RefreshMode) {
         if (busy != null) return
         scope.launch {
             busy = "正在读取…"
             try {
-                repo.refresh(full) { busy = it }
+                repo.refresh(mode) { busy = it }
                 error = null
             } catch (e: CancellationException) {
                 throw e
@@ -117,13 +121,35 @@ fun FitnessScreen() {
         val m = repo.reader.missingPermissions()
         missing = m
         val stale = System.currentTimeMillis() - repo.store.lastRefreshAt > STALE_MS
-        if (m.isEmpty() && (!repo.store.fullLoaded || stale)) refresh(false)
+        if (m.isEmpty() && (!repo.store.hcLoaded || stale)) refresh(RefreshMode.AUTO)
     }
 
     val permLauncher = rememberLauncherForActivityResult(PermissionController.createRequestPermissionResultContract()) {
         scope.launch { checkAndMaybeRefresh() }
     }
     LaunchedEffect(Unit) { checkAndMaybeRefresh() }
+
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            busy = "正在导入历史数据…"
+            try {
+                val n = withContext(Dispatchers.IO) {
+                    val text = ctx.contentResolver.openInputStream(uri)!!.use { it.readBytes().toString(Charsets.UTF_8) }
+                    repo.store.importHistory(text)
+                }
+                Toast.makeText(ctx, "已导入 $n 天的历史数据", Toast.LENGTH_LONG).show()
+                error = null
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                error = "导入失败：${e.message ?: e.javaClass.simpleName}"
+            } finally {
+                busy = null
+                version++
+            }
+        }
+    }
 
     val days = remember(version) { repo.store.snapshot() }
     val series = remember(version, grain) { Aggregation.build(days, grain) }
@@ -159,17 +185,34 @@ fun FitnessScreen() {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             GrainSelector(grain, { grain = it })
             Spacer(Modifier.weight(1f))
-            // Manual refresh re-reads all history, so data added to Health Connect later
-            // (e.g. a backfill of old months) shows up. Auto refresh only re-reads the last 7 days.
-            OutlinedButton(onClick = { refresh(true) }, enabled = busy == null && m?.isEmpty() == true) { Text("刷新") }
+            // Manual refresh re-checks the last 6 months; auto refresh (page opened, data > 6 h old) 14 days.
+            OutlinedButton(onClick = { refresh(RefreshMode.MANUAL) }, enabled = busy == null && m?.isEmpty() == true) { Text("刷新") }
         }
         val updated = repo.store.lastRefreshAt.takeIf { it > 0 }?.let { updatedFmt.format(Instant.ofEpochMilli(it)) }
         Text(
             (if (updated != null) "数据更新于 $updated" else "尚未读取数据") + " · 不含今天",
             style = MaterialTheme.typography.bodySmall,
         )
-        if (days.isNotEmpty()) {
-            Text(coverage(days), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        val cutoff = FitnessStore.CUTOFF
+        if (repo.store.hasHistory()) {
+            Text(
+                "$cutoff 以前：Google Health 导入（${repo.store.historyFirstDay()} 起）\n$cutoff 起：Health Connect",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else if (busy == null) {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("导入 7 月以前的历史数据", fontWeight = FontWeight.Bold)
+                    Text(
+                        "选择 Claude 生成的 crosssync-history 文件，一次性导入 $cutoff 以前的卡路里、体重、体脂和睡眠。" +
+                            "导入后，7 月以前的图表使用这份数据，7 月起使用 Health Connect。",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Button(onClick = { importLauncher.launch(arrayOf("application/json", "application/octet-stream", "*/*")) }) {
+                        Text("选择文件并导入")
+                    }
+                }
+            }
         }
         busy?.let {
             Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
@@ -180,7 +223,7 @@ fun FitnessScreen() {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(err, style = MaterialTheme.typography.bodySmall)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { refresh(true) }) { Text("重试") }
+                        Button(onClick = { refresh(RefreshMode.MANUAL) }) { Text("重试") }
                         TextButton(onClick = { error = null }) { Text("忽略") }
                     }
                 }
@@ -198,13 +241,13 @@ fun FitnessScreen() {
             "体重 / 体脂率" to listOf(
                 ChartLine("体重（kg）", Blue, v.getValue(Field.WEIGHT), connectGaps = true, format = ::f1),
                 ChartLine("体脂率（%）", Orange, v.getValue(Field.BODY_FAT), rightAxis = true, dashed = true,
-                    connectGaps = true, format = { f1(it) + "%" }),
+                    connectGaps = true, format = { f1(it) + "%" }, unit = "%"),
             ),
             "睡眠" to listOf(
-                ChartLine("总睡眠（小时）", White, v.getValue(Field.SLEEP_HOURS), format = { f1(it) + "h" }),
-                ChartLine("浅睡 %", LightBlue, v.getValue(Field.LIGHT), rightAxis = true, dashed = true, format = { f0(it) + "%" }),
-                ChartLine("深睡 %", Indigo, v.getValue(Field.DEEP), rightAxis = true, dashed = true, format = { f0(it) + "%" }),
-                ChartLine("REM %", Purple, v.getValue(Field.REM), rightAxis = true, dashed = true, format = { f0(it) + "%" }),
+                ChartLine("总睡眠（小时）", White, v.getValue(Field.SLEEP_HOURS), format = { f1(it) + "h" }, unit = "h"),
+                ChartLine("浅睡 %", LightBlue, v.getValue(Field.LIGHT), rightAxis = true, dashed = true, format = { f0(it) + "%" }, unit = "%"),
+                ChartLine("深睡 %", Indigo, v.getValue(Field.DEEP), rightAxis = true, dashed = true, format = { f0(it) + "%" }, unit = "%"),
+                ChartLine("REM %", Purple, v.getValue(Field.REM), rightAxis = true, dashed = true, format = { f0(it) + "%" }, unit = "%"),
             ),
         )
 
@@ -232,18 +275,6 @@ fun FitnessScreen() {
             }
         }
     }
-}
-
-/** e.g. "已读取：卡路里 183 天（2026-05-19 起）· 体重 12 天（…）…" — shows how far back each kind of data goes. */
-private fun coverage(days: Map<java.time.LocalDate, DayStats>): String {
-    val parts = listOf(
-        "卡路里" to { d: DayStats -> d.calories }, "体重" to { d: DayStats -> d.weightKg },
-        "体脂" to { d: DayStats -> d.bodyFatPct }, "睡眠" to { d: DayStats -> d.sleepMin },
-    ).map { (name, get) ->
-        val with = days.filterValues { get(it) != null }.keys
-        if (with.isEmpty()) "$name 0 天" else "$name ${with.size} 天（${with.min()} 起）"
-    }
-    return "已读取：" + parts.joinToString(" · ")
 }
 
 @Composable

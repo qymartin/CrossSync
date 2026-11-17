@@ -21,10 +21,10 @@ import kotlin.reflect.KClass
 /**
  * Reads calories, weight, body fat and sleep from Health Connect.
  *
- * When several apps wrote the same kind of data for a day, one app is used per day
- * (never summed across apps): calories prefer CrossSync, then Garmin Connect;
- * sleep prefers Garmin Connect, then CrossSync; otherwise the app with the most data.
- * Weight and body fat are averaged over all readings of the day.
+ * Only one device is worn at a time, so when several apps hold the same kind of data for a day,
+ * the others are copies or fallback estimates (e.g. basal-only calories). So per day, one app is
+ * used, never summed across apps: the app with the highest calorie total, and for sleep the app
+ * with the longest total sleep. Weight and body fat are averaged over all readings of the day.
  */
 class HealthConnectFitnessReader(context: Context) : FitnessReader {
     private val ctx = context.applicationContext
@@ -51,12 +51,10 @@ class HealthConnectFitnessReader(context: Context) : FitnessReader {
         val end = to.plusDays(1).atStartOfDay(zone).toInstant()
         val inRange = { d: LocalDate -> !d.isBefore(from) && !d.isAfter(to) }
 
-        val calories = pickPerDay(
-            readAll(TotalCaloriesBurnedRecord::class, start, end).map {
-                Triple(dateOf(it.startTime, it.startZoneOffset), it.metadata.dataOrigin.packageName, it.energy.inKilocalories)
-            },
-            listOf(ctx.packageName, GARMIN),
-        ).mapValues { (_, v) -> v.sum() }
+        val calories = readAll(TotalCaloriesBurnedRecord::class, start, end)
+            .groupBy({ dateOf(it.startTime, it.startZoneOffset) to it.metadata.dataOrigin.packageName }, { it.energy.inKilocalories })
+            .entries.groupBy({ it.key.first }, { it.value.sum() })
+            .mapValues { (_, perApp) -> perApp.max() }
 
         val weight = readAll(WeightRecord::class, start, end)
             .groupBy({ dateOf(it.time, it.zoneOffset) }, { it.weight.inKilograms })
@@ -66,13 +64,10 @@ class HealthConnectFitnessReader(context: Context) : FitnessReader {
             .groupBy({ dateOf(it.time, it.zoneOffset) }, { it.percentage.value })
             .mapValues { it.value.average() }
 
-        val nights = pickPerDay(
-            readAll(SleepSessionRecord::class, start, end).map {
-                Triple(dateOf(it.endTime, it.endZoneOffset), it.metadata.dataOrigin.packageName, it)
-            },
-            listOf(GARMIN, ctx.packageName),
-            weight = { s -> Duration.between(s.startTime, s.endTime).toMinutes().toDouble() },
-        ).mapValues { (_, sessions) -> sleepOf(sessions) }
+        val nights = readAll(SleepSessionRecord::class, start, end)
+            .groupBy { dateOf(it.endTime, it.endZoneOffset) to it.metadata.dataOrigin.packageName }
+            .entries.groupBy({ it.key.first }, { sleepOf(it.value) })
+            .mapValues { (_, perApp) -> perApp.maxBy { it.total ?: 0.0 } }
 
         val dates = (calories.keys + weight.keys + fat.keys + nights.keys).filter(inRange).toSortedSet()
         return dates.associateWith { d ->
@@ -111,19 +106,6 @@ class HealthConnectFitnessReader(context: Context) : FitnessReader {
         )
     }
 
-    /** For each day keep the records of a single app: the first in [priority], else the one with most data. */
-    private fun <T> pickPerDay(
-        items: List<Triple<LocalDate, String, T>>,
-        priority: List<String>,
-        weight: (T) -> Double = { (it as? Double) ?: 1.0 },
-    ): Map<LocalDate, List<T>> =
-        items.groupBy { it.first }.mapValues { (_, dayItems) ->
-            val byApp = dayItems.groupBy({ it.second }, { it.third })
-            val app = priority.firstOrNull { it in byApp }
-                ?: byApp.maxByOrNull { (_, v) -> v.sumOf(weight) }!!.key
-            byApp.getValue(app)
-        }
-
     private fun dateOf(t: Instant, offset: ZoneOffset?): LocalDate =
         t.atOffset(offset ?: zone.rules.getOffset(t)).toLocalDate()
 
@@ -146,7 +128,6 @@ class HealthConnectFitnessReader(context: Context) : FitnessReader {
     }
 
     companion object {
-        const val GARMIN = "com.garmin.android.apps.connectmobile"
         const val READ_HISTORY = "android.permission.health.READ_HEALTH_DATA_HISTORY"
     }
 }

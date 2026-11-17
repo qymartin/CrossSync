@@ -34,6 +34,8 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
+import kotlin.math.log10
+import kotlin.math.pow
 import kotlin.math.max
 import kotlin.math.min
 
@@ -47,6 +49,8 @@ data class ChartLine(
     /** true: join points across missing days (sparse data such as weight). */
     val connectGaps: Boolean = false,
     val format: (Double) -> String,
+    /** Suffix for this line's axis labels, e.g. "%" or "h". */
+    val unit: String = "",
 )
 
 
@@ -105,29 +109,25 @@ fun LineChart(
         drawCentered(measurer, xTitle, Offset(padL + plotW / 2, size.height - 9.dp.toPx()),
             TextStyle(color = TitleColor, fontSize = 11.sp, fontWeight = FontWeight.Medium))
 
-        val left = range(shown.filter { !it.rightAxis })
-        val right = range(shown.filter { it.rightAxis })
+        val left = axisFor(shown.filter { !it.rightAxis }, null)
+        val right = if (left == null) null else axisFor(shown.filter { it.rightAxis }, left.n)
         if (shown.isEmpty() || left == null || n == 0) {
             drawCentered(measurer, if (shown.isEmpty()) "未选择数据，点上方按钮选择要显示的项目" else "暂无数据",
                 Offset(size.width / 2, padT + plotH / 2), TextStyle(color = LabelColor, fontSize = 13.sp))
             return@Canvas
         }
         val xAt = { i: Int -> padL + if (n == 1) plotW / 2 else i * plotW / (n - 1) }
-        val yAt = { v: Double, r: ClosedFloatingPointRange<Double> ->
-            (padT + plotH - (v - r.start) / (r.endInclusive - r.start) * plotH).toFloat()
-        }
+        val yAt = { v: Double, a: Axis -> (padT + plotH - (v - a.lo) / (a.hi - a.lo) * plotH).toFloat() }
 
         // grid + y labels
-        val leftFmt = shown.first { !it.rightAxis }.format
-        val rightFmt = shown.firstOrNull { it.rightAxis }?.format
-        for (k in 0..3) {
-            val y = padT + plotH - k * plotH / 3
+        val leftUnit = shown.first { !it.rightAxis }.unit
+        val rightUnit = shown.firstOrNull { it.rightAxis }?.unit ?: ""
+        for (k in 0..left.n) {
+            val y = padT + plotH - k * plotH / left.n
             drawLine(GridColor, Offset(padL, y), Offset(padL + plotW, y), 1.dp.toPx())
-            val lv = left.start + k * (left.endInclusive - left.start) / 3
-            drawRightAligned(measurer, leftFmt(lv), Offset(padL - 6.dp.toPx(), y), small)
-            if (right != null && rightFmt != null) {
-                val rv = right.start + k * (right.endInclusive - right.start) / 3
-                drawLeftAligned(measurer, rightFmt(rv), Offset(padL + plotW + 6.dp.toPx(), y), small)
+            drawRightAligned(measurer, axisLabel(left.lo + k * left.step) + leftUnit, Offset(padL - 6.dp.toPx(), y), small)
+            if (right != null) {
+                drawLeftAligned(measurer, axisLabel(right.lo + k * right.step) + rightUnit, Offset(padL + plotW + 6.dp.toPx(), y), small)
             }
         }
 
@@ -182,15 +182,49 @@ fun LineChart(
     }
 }
 
-private fun range(lines: List<ChartLine>): ClosedFloatingPointRange<Double>? {
+/** An axis from [lo] in [n] equal steps of [step]. */
+private data class Axis(val lo: Double, val step: Double, val n: Int) {
+    val hi: Double get() = lo + step * n
+}
+
+/** Smallest "nice" whole step (1, 2, 5, 10, 20, 25, 50, ...) that is at least [raw]. */
+private fun niceStep(raw: Double): Double {
+    val p = 10.0.pow(floor(log10(max(raw, 1e-9))))
+    for (m in listOf(1.0, 2.0, 2.5, 5.0, 10.0)) {
+        val v = m * p
+        if (v >= raw && v >= 1.0 && v % 1.0 == 0.0) return v
+    }
+    return max(1.0, 10 * p)
+}
+
+/**
+ * Axis for these lines: the data takes up about the middle half of the height (so lines are
+ * not overly steep), never goes below 0, and ticks are whole numbers. With [intervals] the axis
+ * uses that many steps, so the right axis lines up with the left axis grid.
+ */
+private fun axisFor(lines: List<ChartLine>, intervals: Int?): Axis? {
     val vals = lines.flatMap { it.values.filterNotNull() }
     if (vals.isEmpty()) return null
-    var lo = vals.min()
-    var hi = vals.max()
-    val pad = if (abs(hi - lo) < 1e-9) max(1.0, abs(hi) * 0.05) else (hi - lo) * 0.12
-    lo -= pad; hi += pad
-    return lo..hi
+    val mn = vals.min()
+    val mx = vals.max()
+    val pad = maxOf((mx - mn) * 0.5, abs(vals.average()) * 0.03, 1.0)
+    val low = max(0.0, mn - pad)
+    val high = mx + pad
+    var n = intervals ?: 4
+    var step = niceStep((high - low) / n)
+    var lo = floor(low / step) * step
+    if (intervals == null) {
+        n = max(2, ceil((high - lo) / step).toInt())
+    } else {
+        while (lo + n * step < high) {
+            step = niceStep(step * 1.01)
+            lo = floor(low / step) * step
+        }
+    }
+    return Axis(lo, step, n)
 }
+
+private fun axisLabel(v: Double) = String.format(java.util.Locale.US, "%,.0f", v)
 
 private fun DrawScope.drawCentered(m: TextMeasurer, text: String, center: Offset, style: TextStyle) {
     val l = m.measure(text, style)
