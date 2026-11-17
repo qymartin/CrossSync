@@ -199,8 +199,8 @@ private fun niceStep(raw: Double): Double {
 
 /**
  * Axis for these lines: the data takes up about the middle half of the height (so lines are
- * not overly steep), never goes below 0, and ticks are whole numbers. With [intervals] the axis
- * uses that many steps, so the right axis lines up with the left axis grid.
+ * not overly steep), never goes below 0, ticks are whole numbers, and there are always 5 labels.
+ * The right axis passes the left axis' [intervals] so both line up with the same grid.
  */
 private fun axisFor(lines: List<ChartLine>, intervals: Int?): Axis? {
     val vals = lines.flatMap { it.values.filterNotNull() }
@@ -210,16 +210,13 @@ private fun axisFor(lines: List<ChartLine>, intervals: Int?): Axis? {
     val pad = maxOf((mx - mn) * 0.5, abs(vals.average()) * 0.03, 1.0)
     val low = max(0.0, mn - pad)
     val high = mx + pad
-    var n = intervals ?: 4
+    // Always 4 steps = 5 labels, on every chart and both axes.
+    val n = intervals ?: 4
     var step = niceStep((high - low) / n)
     var lo = floor(low / step) * step
-    if (intervals == null) {
-        n = max(2, ceil((high - lo) / step).toInt())
-    } else {
-        while (lo + n * step < high) {
-            step = niceStep(step * 1.01)
-            lo = floor(low / step) * step
-        }
+    while (lo + n * step < high) {
+        step = niceStep(step * 1.01)
+        lo = floor(low / step) * step
     }
     return Axis(lo, step, n)
 }

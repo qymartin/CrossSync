@@ -1,6 +1,7 @@
 package io.github.qymartin.crosssync.fitness
 
 import java.time.LocalDate
+import java.time.YearMonth
 
 enum class Grain(val label: String, val sub: String) {
     DAY("日", "每日数值"),
@@ -18,7 +19,7 @@ data class Series(
 object Aggregation {
     /**
      * DAY: the 21 days ending yesterday.
-     * MONTH: January to this month of this year, each the daily average of that month.
+     * MONTH: the last 12 months including this one, each the daily average of that month.
      * YEAR: every year with at least one data point, each the daily average of that year.
      * Averages only count days that have a value; today is never included.
      */
@@ -27,8 +28,8 @@ object Aggregation {
         val buckets: List<Pair<String, List<DayStats>>> = when (grain) {
             Grain.DAY -> (20 downTo 0).map { y.minusDays(it.toLong()) }
                 .map { d -> d.toString() to listOfNotNull(days[d]) }
-            Grain.MONTH -> (1..y.monthValue).map { m ->
-                "%04d-%02d".format(y.year, m) to days.filterKeys { it.year == y.year && it.monthValue == m && !it.isAfter(y) }.values.toList()
+            Grain.MONTH -> (11 downTo 0).map { YearMonth.from(today).minusMonths(it.toLong()) }.map { ym ->
+                ym.toString() to days.filterKeys { YearMonth.from(it) == ym && !it.isAfter(y) }.values.toList()
             }
             Grain.YEAR -> days.filterKeys { !it.isAfter(y) }.entries
                 .groupBy({ it.key.year }, { it.value }).toSortedMap()

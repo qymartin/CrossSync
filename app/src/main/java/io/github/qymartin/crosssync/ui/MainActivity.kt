@@ -284,7 +284,7 @@ private fun MainScreen() {
                     Scheduler.runRange(ctx, from, to, force = true, trigger = "指定范围")
                     toast(ctx, "已开始同步 $from ~ $to"); tick++
                 }
-            }, modifier = Modifier.fillMaxWidth()) { Text("同步指定日期范围（强制覆盖）") }
+            }, modifier = Modifier.fillMaxWidth()) { Text("同步指定日期范围") }
         }
 
         Section("导出") {
@@ -317,7 +317,7 @@ private fun MainScreen() {
                 }
             }
             if (runs.size > 1) SubTitle("历史")
-            runs.drop(1).take(20).forEach { r ->
+            runs.drop(1).take(10).forEach { r ->
                 Row {
                     Text(if (r.ok) "✓ " else "✗ ", color = if (r.ok) ok else bad, fontWeight = FontWeight.Bold)
                     Text(
