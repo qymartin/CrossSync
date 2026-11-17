@@ -2,7 +2,7 @@
 
 Android app that syncs Garmin Connect daily data to Health Connect. The owner talks in Chinese; reply in Chinese.
 Version history and feature lists (v1.0, v1.1, v1.2): `docs/VERSIONS.md`.
-Snapshots: `baseline-v1.0` (Release 1.0.8), `baseline-v1.1` (Release 1.1.13). To roll back to 1.1, use the same steps as below with `baseline-v1.1` and `printf '1.1\n' > VERSION`.
+Snapshots: `baseline-v1.0` (Release 1.0.8), `baseline-v1.1` (Release 1.1.13), `baseline-v1.2` (Release 1.2.16, final 1.2). To roll back to 1.1 or 1.2, use the same steps as below with that branch and `printf '1.x\n' > VERSION`.
 Product overview, working agreements and the open backlog live in the claude.ai Project "CrossSync"
 (docs `claude/CrossSync-guide.md` and `claude/status-and-backlog.md`); update the backlog doc when work finishes.
 Personal health data (the Takeout export and `crosssync-history.json`) must never be committed: the repo is public.

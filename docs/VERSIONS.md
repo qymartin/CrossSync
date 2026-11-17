@@ -5,7 +5,7 @@
 
 ## v1.2
 
-- 首个版本：Release `v1.2.14`；v1.1 的最终代码保存在分支 `baseline-v1.1`（= Release 1.1.13）
+- 首个版本：Release `v1.2.14`；定稿版本：Release `v1.2.16`（分支 `baseline-v1.2`）；v1.1 的最终代码保存在分支 `baseline-v1.1`（= Release 1.1.13）
 - 只改 Fitness 模块，Sync 不变。
 
 ### 改动
