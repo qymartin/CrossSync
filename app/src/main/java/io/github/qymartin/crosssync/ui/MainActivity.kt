@@ -76,6 +76,7 @@ import io.github.qymartin.crosssync.garmin.GarminAuth
 import io.github.qymartin.crosssync.garmin.LoginActivity
 import io.github.qymartin.crosssync.healthconnect.HealthConnectSink
 import io.github.qymartin.crosssync.core.Metric
+import io.github.qymartin.crosssync.export.Exporter
 import io.github.qymartin.crosssync.sync.Ledger
 import io.github.qymartin.crosssync.sync.RunLog
 import io.github.qymartin.crosssync.sync.Notifier
@@ -180,7 +181,7 @@ private fun MainScreen() {
     val notifLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
         if (uri != null) {
-            ctx.contentResolver.openOutputStream(uri)?.use { it.write(ledger.toCsv().toByteArray()) }
+            ctx.contentResolver.openOutputStream(uri)?.use { it.write(Exporter.csv(ctx).toByteArray()) }
             toast(ctx, "已导出")
         }
     }
@@ -288,8 +289,13 @@ private fun MainScreen() {
         }
 
         Section("导出") {
-            Text("把 CrossSync 写入过的全部数据导出为 CSV 文件，作为独立备份。", style = MaterialTheme.typography.bodySmall)
-            OutlinedButton(onClick = { exportLauncher.launch("crosssync-${LocalDate.now()}.csv") },
+            Text("把 CrossSync 处理过的全部数据导出为一个 CSV 文件，一行是某一天的一项数据：", style = MaterialTheme.typography.bodySmall)
+            Text("• 同步记录：写入 Health Connect 的每日总卡路里（含同步时间和状态）\n" +
+                "• 健身数据：卡路里、体重、体脂、睡眠和分期（含导入的 Google Health 历史）",
+                style = MaterialTheme.typography.bodySmall)
+            Text("以后 Sync 增加新的数据类型，会自动出现在同一个文件里。", style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            OutlinedButton(onClick = { exportLauncher.launch("crosssync-export-${LocalDate.now()}.csv") },
                 modifier = Modifier.fillMaxWidth()) { Text("导出 CSV") }
         }
 

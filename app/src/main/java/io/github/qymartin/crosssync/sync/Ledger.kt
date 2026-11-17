@@ -144,18 +144,6 @@ class Ledger private constructor(private val file: File) {
         }
     }
 
-    @Synchronized
-    fun toCsv(): String {
-        val fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneId.systemDefault())
-        val sb = StringBuilder("date,metric,value,record_id,synced_at,status,error\n")
-        all().sortedBy { it.date }.forEach { e ->
-            val err = (e.error ?: "").replace("\"", "\"\"")
-            sb.append("${e.date},${e.metric},${"%.1f".format(java.util.Locale.US, e.value)},${e.recordId},")
-            sb.append("${fmt.format(Instant.ofEpochMilli(e.syncedAt))},${if (e.ok) "ok" else "failed"},\"$err\"\n")
-        }
-        return sb.toString()
-    }
-
     companion object {
         private const val MAX_RUNS = 30
 

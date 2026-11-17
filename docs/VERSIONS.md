@@ -16,6 +16,7 @@
 - **纵轴**：整数刻度（1、2、5、10、20、25、50…），最低不低于 0，数据大约占图高的一半；右轴与左轴网格对齐。
 - 移除了 1.1.12 的「已读取」诊断行。
 - 1.2 后续细节：每张图固定 5 个纵轴刻度；月视图改为过去 12 个月（含本月）；Sync 的「同步指定日期范围」按钮去掉「（强制覆盖）」字样（行为不变：仍会重写该范围）；同步记录的历史只显示最近 10 条。
+- 导出（Sync 页）：导出 CrossSync 处理过的全部数据为一个 CSV，一行是某天的一项数据，列为 `date,type,value,unit,source,status,synced_at,error`。包含 Sync 的同步记录（`total_calories`，来源 `sync→health_connect`）和 Fitness 的全部每日数据（`calories`、`weight`、`body_fat`、`sleep`、`sleep_light`、`sleep_deep`、`sleep_rem`，来源 `google_health_import` 或 `health_connect`）。由 `export/` 层汇总：每个模块实现 `ExportProvider` 提供自己的行，模块之间不互相读取。以后新增数据类型只会多出新的 type，列不变。
 
 ### 导入文件的生成规则（`crosssync-history.json`）
 - 只含 2026-07-01 以前的数据，日期按太平洋时间（含夏令时）计算。

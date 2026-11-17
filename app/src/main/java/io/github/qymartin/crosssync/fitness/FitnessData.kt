@@ -75,6 +75,12 @@ class FitnessStore private constructor(private val file: File) {
         putAll(days.tailMap(CUTOFF, true))
     }
 
+    /** Same days as [snapshot], each with where it came from (for the export). */
+    @Synchronized
+    fun snapshotWithSource(): List<Triple<LocalDate, DayStats, String>> =
+        history.headMap(CUTOFF, false).map { Triple(it.key, it.value, "google_health_import") } +
+            days.tailMap(CUTOFF, true).map { Triple(it.key, it.value, "health_connect") }
+
     @Synchronized
     fun hasHistory() = history.isNotEmpty()
 
