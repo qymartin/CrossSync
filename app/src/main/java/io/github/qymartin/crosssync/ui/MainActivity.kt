@@ -26,6 +26,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.res.painterResource
 import io.github.qymartin.crosssync.R
 import io.github.qymartin.crosssync.fitness.FitnessScreen
+import io.github.qymartin.crosssync.report.ReportKind
+import io.github.qymartin.crosssync.report.ReportNotifier
+import io.github.qymartin.crosssync.report.ReportScheduler
+import io.github.qymartin.crosssync.report.ReportScreen
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -87,11 +91,25 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 class MainActivity : ComponentActivity() {
+    /** A tab (and report kind) asked for by a notification; read by [AppRoot]. */
+    private val opened = mutableStateOf<Pair<Int, String?>?>(null)
+
+    private fun readIntent(i: Intent?) {
+        if (i?.hasExtra(EXTRA_TAB) == true) opened.value = i.getIntExtra(EXTRA_TAB, 0) to i.getStringExtra(ReportNotifier.EXTRA_KIND)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        readIntent(intent)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         Notifier.ensureChannels(this)
         Scheduler.scheduleDaily(this)
+        ReportScheduler.ensure(this)
+        if (savedInstanceState == null) readIntent(intent)
         setContent {
             val dark = isSystemInDarkTheme()
             val colors = when {
@@ -101,17 +119,24 @@ class MainActivity : ComponentActivity() {
                 else -> lightColorScheme()
             }
             MaterialTheme(colorScheme = colors) {
-                Surface(Modifier.fillMaxSize()) { AppRoot() }
+                Surface(Modifier.fillMaxSize()) { AppRoot(opened.value) }
             }
         }
     }
+
+    companion object {
+        const val EXTRA_TAB = "tab"
+        const val TAB_REPORT = 1
+    }
 }
 
-/** Bottom navigation: Fitness (left, default) and Sync (right). The two modules run independently. */
+/** Bottom navigation: Fitness (left, default) | Report | Sync. The modules run independently. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AppRoot() {
+private fun AppRoot(opened: Pair<Int, String?>?) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
+    LaunchedEffect(opened) { opened?.let { tab = it.first } }
+    val openKind = opened?.second?.let { k -> ReportKind.entries.firstOrNull { it.name == k } }
     Scaffold(
         bottomBar = {
             NavigationBar {
@@ -122,6 +147,11 @@ private fun AppRoot() {
                 )
                 NavigationBarItem(
                     selected = tab == 1, onClick = { tab = 1 },
+                    icon = { Icon(painterResource(R.drawable.ic_tab_report), contentDescription = null) },
+                    label = { Text("Report") },
+                )
+                NavigationBarItem(
+                    selected = tab == 2, onClick = { tab = 2 },
                     icon = { Icon(painterResource(R.drawable.ic_stat_sync), contentDescription = null) },
                     label = { Text("Sync") },
                 )
@@ -129,7 +159,11 @@ private fun AppRoot() {
         },
     ) { pad ->
         Box(Modifier.fillMaxSize().padding(pad).consumeWindowInsets(pad)) {
-            if (tab == 0) FitnessScreen() else MainScreen()
+            when (tab) {
+                0 -> FitnessScreen()
+                1 -> ReportScreen(openKind)
+                else -> MainScreen()
+            }
         }
     }
 }
