@@ -1,12 +1,13 @@
 # CrossSync — notes for Claude
 
 Android app that syncs Garmin Connect daily data to Health Connect. The owner talks in Chinese; reply in Chinese.
-Version history and feature lists (v1.0, v1.1, v1.2): `docs/VERSIONS.md`.
+Version history and feature lists (v1.0, v1.1, v1.2, v1.3): `docs/VERSIONS.md`.
 Snapshots: `baseline-v1.0` (Release 1.0.8), `baseline-v1.1` (Release 1.1.13), `baseline-v1.2` (Release 1.2.16, final 1.2). To roll back to 1.1 or 1.2, use the same steps as below with that branch and `printf '1.x\n' > VERSION`.
 Product overview, working agreements and the open backlog live in the claude.ai Project "CrossSync"
 (docs `claude/CrossSync-guide.md` and `claude/status-and-backlog.md`); update the backlog doc when work finishes.
 Personal health data (the Takeout export and `crosssync-history.json`) must never be committed: the repo is public.
-Modules: Sync (`core/`, `garmin/`, `healthconnect/`, `sync/`, the Sync screen in `ui/MainActivity.kt`) and Fitness (`fitness/`, read-only from Health Connect). Keep them independent.
+Modules: Sync (`core/`, `garmin/`, `healthconnect/`, `sync/`, the Sync screen in `ui/MainActivity.kt`), Fitness (`fitness/`, read-only from Health Connect) and Report (`report/`, reads Fitness data only through `ReportDataSource`; sends weekly/monthly averages to the Claude API). Keep them independent.
+The user's Anthropic API key and report profile live encrypted on the phone only; never log or commit them. Report rules (what may be sent, the writing requirements) were agreed with the user: change them only after asking.
 
 ## Build and release
 - Every push to `main` builds a signed APK in GitHub Actions and publishes Release `v<VERSION>.<run_number>`. The owner installs and updates through Obtainium.
@@ -34,6 +35,7 @@ git push origin main
 
 Keep `docs/`, `CLAUDE.md` and `signing/` as they are on main. Then wait for `ci-logs` to show the new run
 succeeded, tell the user the new release number (it will read 1.0.<run>), and ask them to update in Obtainium.
+Rolling back from 1.3 removes the Report tab; `reports.json` and the encrypted profile stay on the phone unused, and the Health Connect background-read permission stays granted until removed.
 Rolling back from 1.1 removes the Fitness tab; its cache file `fitness.json` stays on the phone unused, and the extra
 Health Connect read permissions stay granted until the user removes them. Data compatibility: v1.0 reads the ledger JSON with `optString`, so a ledger written by a later version still loads;
 if a later version added new Health Connect data types, records it wrote stay in Health Connect.
